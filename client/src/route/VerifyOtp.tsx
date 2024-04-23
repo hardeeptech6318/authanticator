@@ -1,9 +1,12 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation} from '@tanstack/react-query';
 import axios from 'axios';
 import {  FormEvent, useState } from 'react';
 import OtpInput from 'react-otp-input';
 
-function VerifyOtp() {
+function VerifyOtp({requestId}:{requestId:string | null }) {
+
+  
+
 
     const [otp, setOtp] = useState('');
 
@@ -12,10 +15,26 @@ function VerifyOtp() {
 
     const mutation = useMutation({
       mutationFn:async () => {
-        const fromdata=new FormData()
-        fromdata.append("otp",otp)
-        const respone=await axios.post("http://localhost:5000/verifyotp",fromdata)
-
+        // const fromdata=new FormData()
+        // fromdata.append("otp",otp)
+        // fromdata.append("request_id",requestId)
+        if(otp==""){
+          return
+        }
+        const config = {
+          method: 'post',
+          maxBodyLength: Infinity,
+          url: 'http://localhost:5000/verifyotp',
+          headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          data : {
+            otp,request_id: requestId
+          }
+          };
+        const respone=await axios.request(config)
+          
+0
         return respone
       },
     })

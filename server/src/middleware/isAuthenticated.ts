@@ -6,7 +6,7 @@ export function isAuthenticated(req: any, res: Response, next: NextFunction) {
   try {
     
 
-    if (req.session.user) {
+    if (req?.session?.user) {
     
 
       const cookieValue = req?.headers?.cookie.split(";");
@@ -23,8 +23,10 @@ export function isAuthenticated(req: any, res: Response, next: NextFunction) {
 
       if (!token) {
         
+        console.log("token not available");
+        
 
-      return  res.redirect("/login");
+      return  res.status(401).send("unauthorized");
       }
 
       if (token) {
@@ -39,13 +41,13 @@ export function isAuthenticated(req: any, res: Response, next: NextFunction) {
         } else {
           
 
-        return  res.redirect("/login");
+          return  res.status(401).send("unauthorized");
         }
       }
     } else {
       
-
-    return  res.redirect("/login");
+      console.log("session not available");
+      return  res.status(401).send("unauthorized");
     }
   } catch (error) {
     console.log(error);

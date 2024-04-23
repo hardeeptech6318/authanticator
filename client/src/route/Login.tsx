@@ -1,6 +1,8 @@
 import axios from "axios"
+import { useEffect, useState } from "react"
 import { useForm, SubmitHandler } from "react-hook-form"
 import { Link } from 'react-router-dom'
+import VerifyOtp from "./VerifyOtp"
 
 type Inputs = {
 email :string     
@@ -9,6 +11,8 @@ password   :string
 }
 
 function Login() {
+
+  const [requestId, setrequestId] = useState(null)
 
   const {
     register,
@@ -20,27 +24,14 @@ function Login() {
 
 
   const onSubmit: SubmitHandler<Inputs> =async (data:Inputs) => {
-    // const formData = new FormData();
-    // formData.append('fullname', data.fullname);
-    // formData.append('email', data.email);
-    // formData.append('username', data.username);
-    // formData.append('password', data.password);
-    // await axios.post("http://localhost:5000/signup", data, {
-    //     headers: { "Content-Type": "multipart/form-data" },
-    //   });
-try {
-
-
     
-// const formdata = JSON.stringify(data);
+try {
 
 const config = {
 method: 'post',
 maxBodyLength: Infinity,
 url: 'http://localhost:5000/login',
 headers: { 
-
-
 'Content-Type': 'application/x-www-form-urlencoded'
 },
 data : data
@@ -48,7 +39,8 @@ data : data
 
 
 const response=await axios.request(config)
-console.log(response);
+console.log(response.data.request_id);
+setrequestId(response.data?.request_id)
 } catch (error) {
 console.log(error);
 
@@ -56,13 +48,18 @@ console.log(error);
 
   }
 
+useEffect(()=>{
+console.log(requestId);
 
+},[requestId])
 
   return (
+    <>
+    {!requestId  ?
     <section className="flex justify-center relative">
-    {/* <img src="https://pagedone.io/asset/uploads/1702362010.png" alt="gradient background image" className="w-full h-full object-cover fixed"/> */}
+    
     <div className="mx-auto max-w-lg px-6 lg:px-8 absolute py-20">
-      {/* <img src="https://pagedone.io/asset/uploads/1702362108.png" alt="pagedone logo" className="mx-auto lg:mb-11 mb-8"/> */}
+    
       <div className="rounded-2xl bg-white shadow-xl">
         <form action="" className="lg:p-11 p-7 mx-auto" onSubmit={handleSubmit(onSubmit)}>
           <div className="mb-11">
@@ -80,7 +77,12 @@ console.log(error);
         </form>
       </div>
     </div>
-  </section>
+  </section>:
+
+  <VerifyOtp requestId={requestId}/>
+  
+}
+  </>
   )
 }
 

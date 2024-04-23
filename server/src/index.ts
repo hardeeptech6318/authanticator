@@ -1,5 +1,6 @@
 import express, { Express, Request, RequestHandler, Response } from "express";
 import dotenv from "dotenv";
+dotenv.config();
 import cors from "cors";
 
 import crypto from "crypto";
@@ -10,33 +11,20 @@ import MySQLStore from "express-mysql-session";
 import jwt from "jsonwebtoken";
 
 import path from "path";
-import { isAuthenticated } from "./middleware/isAuthenticated";
+
 import { connection, options } from "./db/connection";
 import { sendOtp } from "./middleware/sendOtp";
+import { isAuthenticated } from "./middleware/isAuthenticated";
 
 const SqlStore = MySQLStore(session as any);
 
 const sessionStore = new SqlStore(options, connection);
 
-dotenv.config();
-
 const app: Express = express();
 
-app.use(
-  session({
-    name: "authsession",
-    resave: false,
-    saveUninitialized: false,
-    store: sessionStore,
-    secret: "somesecrect",
-    cookie: {
-      httpOnly: false,
-      //  maxAge: 'TWO_HOURS',
-      sameSite: false,
-      secure: false,
-    },
-  })
-);
+// app.use(express.json());
+
+
 
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
@@ -51,52 +39,29 @@ interface CustomSession extends SessionData {
 }
 
 
-
-// app.get("/verifyotp", async (req: Request, res: Response) => {
-//   try {
-//     const otpForm = `
-//     <!DOCTYPE html>
-//     <html lang="en">
-//     <head>
-//       <meta charset="UTF-8">
-//       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-//       <title>Login</title>
-//     </head>
-//     <body>
-//       <h2>Login</h2>
-//       <form action="/verifyotp" method="POST">
-        
-//         <label for="otp">OTP:</label><br>
-//         <input type="text" id="otp" name="otp" required><br><br>
-//         <button type="submit">Login</button>
-//       </form>
-//     </body>
-//     </html>
-//   `;
-//     res.send(otpForm);
-//   } catch (error) {
-//     console.log(error);
-//   }
-// });
+app.use(
+  session({
+    name: "authsession",
+    resave: false,
+    saveUninitialized: false,
+    store: sessionStore,
+    secret: process.env.AUTH_SESSION_SECRECT as string,
+    cookie: {
+      httpOnly: false,
+      //  maxAge: 50000000,
+      // sameSite: false,
+      secure: false,
+    },
+  })
+);
 
 app.post("/verifyotp", async (req: Request, res: Response) => {
   try {
-    const cookieValue = req?.headers?.cookie?.split(";");
+    let user = 8;
 
-    let user;
-    let request_id: string | null = null;
+    const { request_id } = req.body;
 
-    cookieValue?.forEach((element: string) => {
-      if (element?.trim().startsWith("user=")) {
-        user = element.split("=")[1];
-      }
-
-      if (element?.trim().startsWith("request_id=")) {
-        request_id = element.split("=")[1];
-      }
-    });
-
-    if (!user || request_id == null) {
+    if (!user || !request_id) {
       return res.status(400).send("user or request id not available");
     }
 
@@ -121,10 +86,8 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
           const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
 
           res.cookie("token", token, { httpOnly: true, secure: true });
-          res.clearCookie("user");
-          res.clearCookie("request_id");
 
-          return res.redirect("/");
+          return res.status(201).send("seccess");
         }
       }
     );
@@ -132,30 +95,6 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
     console.log(error);
   }
 });
-
-// app.get("/login", (req: Request, res: Response) => {
-//   const loginForm = `
-//     <!DOCTYPE html>
-//     <html lang="en">
-//     <head>
-//       <meta charset="UTF-8">
-//       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-//       <title>Login</title>
-//     </head>
-//     <body>
-//       <h2>Login</h2>
-//       <form action="/login" method="POST">
-//         <label for="email">Email:</label><br>
-//         <input type="email" id="email" name="email" required><br>
-//         <label for="password">Password:</label><br>
-//         <input type="password" id="password" name="password" required><br><br>
-//         <button type="submit">Login</button>
-//       </form>
-//     </body>
-//     </html>
-//   `;
-//   res.send(loginForm);
-// });
 
 app.post("/login", async (req: any, res: Response) => {
   try {
@@ -165,10 +104,10 @@ app.post("/login", async (req: any, res: Response) => {
       return res.send("please provide email and password");
     }
 
-    const salt = "54564adhbhkljglkj54a6dsjhgd466asdjdhgjha";
+    const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
-    const hashpassword = hash.digest("hex");
+    const hashpassword = hash.digest("hex");  
 
     connection?.query(
       "SELECT id, email, password,mobile FROM user WHERE email = ?",
@@ -197,14 +136,7 @@ app.post("/login", async (req: any, res: Response) => {
             [otp, messages?.sid, user?.id]
           );
 
-          // console.log(messages.sid);
-          res.cookie("user", user.id, { httpOnly: true, secure: true });
-          res.cookie("request_id", messages.sid, {
-            httpOnly: true,
-            secure: true,
-          });
-
-          return res.status(200).send("OTP send seccessfully successful");
+          return res.status(201).json({ request_id: messages.sid });
         }
       }
     );
@@ -216,7 +148,7 @@ app.post("/login", async (req: any, res: Response) => {
 app.post("/signup", async (req: Request, res: Response) => {
   try {
     const { fullname, email, username, password, mobile } = req.body;
-    const salt = "54564adhbhkljglkj54a6dsjhgd466asdjdhgjha";
+    const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
     const hashpassword = hash.digest("hex");
@@ -228,9 +160,32 @@ app.post("/signup", async (req: Request, res: Response) => {
 
     res.send("User created");
   } catch (error) {
+    console.log(error);
+
     res.send(error);
   }
 });
+
+
+app.get("/api/user",isAuthenticated,async(req:Request,res:Response)=>{
+  try {
+
+    if(req.session ){
+     connection?.query(
+        "SELECT id, email, password,mobile FROM user WHERE id = ?",
+        [(req.session as CustomSession)?.user],async function (err, results: any, fields) {
+          if(err) return res.status(400).send("Something went wrong")
+          return res.status(200).json(results[0])
+        })
+    } else{
+      return res.status(401).send("unauthorized")
+    }
+    
+  } catch (error) {
+    console.log(error);
+    
+  }
+})
 
 app.use(express.static(path.join(__dirname, "../../client/dist")));
 
