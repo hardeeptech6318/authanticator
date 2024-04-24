@@ -18,13 +18,11 @@ import { isAuthenticated } from "./middleware/isAuthenticated";
 
 const SqlStore = MySQLStore(session as any);
 
-const sessionStore = new SqlStore(options, connection);
+const sessionStore = new SqlStore(options);
 
 const app: Express = express();
 
 // app.use(express.json());
-
-
 
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
@@ -38,11 +36,10 @@ interface CustomSession extends SessionData {
   user?: string; // Define 'user' property as optional
 }
 
-
 app.use(
   session({
     name: "authsession",
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     store: sessionStore,
     secret: process.env.AUTH_SESSION_SECRECT as string,
@@ -103,11 +100,13 @@ app.post("/login", async (req: any, res: Response) => {
     if (!email && !password) {
       return res.send("please provide email and password");
     }
-
+    if (req.session) {
+      req.session.destroy(8, function (err: any) {});
+    }
     const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
-    const hashpassword = hash.digest("hex");  
+    const hashpassword = hash.digest("hex");
 
     connection?.query(
       "SELECT id, email, password,mobile FROM user WHERE email = ?",
@@ -126,6 +125,25 @@ app.post("/login", async (req: any, res: Response) => {
         if (hashpassword !== user.password) {
           return res.status(401).send("Invalid email or password");
         }
+
+        connection.query(
+          "SELECT id FROM sessions WHERE JSON_EXTRACT(data, '$.user') = ?;",
+          [user.id],
+          async function (err, results: any, fields) {
+            if (results &&  results.length > 0) {
+              for (let i = 0; i < results.length; i++) {
+                try {
+                  const element = results[i];
+                 await connection.query("DELETE FROM sessions WHERE id = ? ", [
+                    element.id,
+                  ]);
+                } catch (error) {
+                  return res.status(400).send("Something went wrong");
+                }
+              }
+            }
+          }
+        );
 
         const response = await sendOtp(user.mobile);
 
@@ -166,26 +184,35 @@ app.post("/signup", async (req: Request, res: Response) => {
   }
 });
 
-
-app.get("/api/user",isAuthenticated,async(req:Request,res:Response)=>{
+app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
   try {
-
-    if(req.session ){
-     connection?.query(
-        "SELECT id, email, password,mobile FROM user WHERE id = ?",
-        [(req.session as CustomSession)?.user],async function (err, results: any, fields) {
-          if(err) return res.status(400).send("Something went wrong")
-          return res.status(200).json(results[0])
-        })
-    } else{
-      return res.status(401).send("unauthorized")
+    if (req.session) {
+      connection?.query(
+        "SELECT id, email, username,fullname FROM user WHERE id = ?",
+        [(req.session as CustomSession)?.user],
+        async function (err, results: any, fields) {
+          if (err) return res.status(400).send("Something went wrong");
+          return res.status(200).json(results[0]);
+        }
+      );
+    } else {
+      return res.status(401).send("unauthorized");
     }
-    
   } catch (error) {
     console.log(error);
-    
   }
-})
+});
+
+app.post("/logout", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    req.session.destroy(function (err) {
+      res.clearCookie("token");
+      return res.status(200).send("logout seccesssfully");
+    });
+  } catch (error) {
+    console.log(error);
+  }
+});
 
 app.use(express.static(path.join(__dirname, "../../client/dist")));
 
