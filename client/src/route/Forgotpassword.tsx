@@ -17,7 +17,7 @@ type PasswordInputs = {
 function Forgotpassword() {
   const navigate = useNavigate();
   const [formdata, setformdata] = useState({
-    request_id: "",
+    request_id: null,
     otp: "",
     password: "",
     email: "",
@@ -200,6 +200,7 @@ function Forgotpassword() {
             !formdata?.otpverify ? (
               <form action="" method="post" onSubmit={handleSubmit}>
                 <div className="flex flex-col space-y-16 lg:p-11 p-7 mx-auto">
+                  {formdata.mobile && <div>Otp send at  {formdata.mobile}</div>}
                   <OTPInput
                     value={formdata.otp}
                     inputType="number"

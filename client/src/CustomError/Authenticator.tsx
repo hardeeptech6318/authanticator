@@ -10,9 +10,15 @@ function Authenticator({children}:{children:React.ReactNode}) {
     const navigate= useNavigate();
 
     const queryClient = new QueryClient({
-  
-      
+      defaultOptions:{
+        queries: {
+          retry:false
+        }
+      },
+        
+        
         queryCache: new QueryCache({
+          
         onError: (error:Error) =>{
 
             const axiosError = error as AxiosError; // Type assertion

@@ -28,11 +28,11 @@ export const sendOtp=async(mobile:string)=>{
   
           const messages = await client.messages.create({
             body: `otp verification code for authapp ${sixDigitotp}`,
-            to: `+91${mobile}`,
+            to: `${mobile}`,
             from: process.env.TWILO_MOBILE_NO as string,
           });
 
-          console.log(messages);
+          
           
 
           return {otp:sixDigitotp,messages:messages}
