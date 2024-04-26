@@ -10,6 +10,7 @@ import { BrowserRouter} from "react-router-dom"
   
 // } from '@tanstack/react-query'
 import Authenticator from './CustomError/Authenticator.tsx'
+import { Toaster } from 'react-hot-toast';
 
 
 // import { AxiosError } from 'axios'
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     
     <BrowserRouter>
     <Authenticator>
+      <Toaster/>
     <App />
     </Authenticator>
     

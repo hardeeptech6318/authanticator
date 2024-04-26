@@ -1,8 +1,9 @@
 import axios from "axios"
-import { useEffect, useState } from "react"
+import {  useState } from "react"
 import { useForm, SubmitHandler } from "react-hook-form"
 import { Link } from 'react-router-dom'
-import VerifyOtp from "./VerifyOtp"
+import VerifyOtp from "../component/VerifyOtp"
+import toast from 'react-hot-toast';
 
 type Inputs = {
 email :string     
@@ -13,12 +14,12 @@ password   :string
 function Login() {
 
   const [requestId, setrequestId] = useState(null)
+  const [user, setuser] = useState(null)
+  const [errorMsg, seterrorMsg] = useState(null)
 
   const {
     register,
     handleSubmit,
-    // watch,
-    // formState: { errors },
   } = useForm<Inputs>()
 
 
@@ -39,23 +40,24 @@ data : data
 
 
 const response=await axios.request(config)
-console.log(response.data.request_id);
+
 setrequestId(response.data?.request_id)
-} catch (error) {
-console.log(error);
+setuser(response.data?.user)
+toast.success("OTP send")
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+} catch (error:any) {
+
+seterrorMsg(error?.response?.data.message)
 
 }
 
   }
 
-useEffect(()=>{
-console.log(requestId);
 
-},[requestId])
 
   return (
     <>
-    {!requestId  ?
+    {!requestId && !user  ?
     <section className="flex justify-center relative">
     
     <div className="mx-auto max-w-lg px-6 lg:px-8 absolute py-20">
@@ -68,9 +70,10 @@ console.log(requestId);
           </div>
           <input {...register("email")}  type="text" className="w-full h-12 text-gray-900 placeholder:text-gray-400 text-lg font-normal leading-7 rounded-full border-gray-300 border shadow-sm focus:outline-none px-4 mb-6" placeholder="Username"/>
           <input {...register("password")}  type="text" className="w-full h-12 text-gray-900 placeholder:text-gray-400 text-lg font-normal leading-7 rounded-full border-gray-300 border shadow-sm focus:outline-none px-4 mb-1" placeholder="Password"/>
-          <a href="javascript:;" className="flex justify-end mb-6">
+          <Link to="/forgotpassword"   className="flex justify-end mb-6">
             <span className="text-indigo-600 text-right text-base font-normal leading-6">Forgot Password?</span>
-          </a>
+          </Link>
+          {errorMsg && <div>{errorMsg}</div>}
           <button className="w-full h-12 text-white text-center text-base font-semibold leading-6 rounded-full hover:bg-indigo-800 transition-all duration-700 bg-indigo-600 shadow-sm mb-11">Login</button>
           <Link to="/signup" className="flex justify-center text-gray-900 text-base font-medium leading-6"> Don’t have an account? <span className="text-indigo-600 font-semibold pl-3"> Sign Up</span>
           </Link>
@@ -79,7 +82,7 @@ console.log(requestId);
     </div>
   </section>:
 
-  <VerifyOtp requestId={requestId}/>
+  <VerifyOtp user={user} requestId={requestId}/>
   
 }
   </>

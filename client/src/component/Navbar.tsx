@@ -1,6 +1,7 @@
 import { useMutation} from "@tanstack/react-query";
 import axios, { AxiosResponse } from "axios";
 import { Avatar, Dropdown, Navbar } from "flowbite-react";
+import { useNavigate } from "react-router-dom";
 
 export interface UserType {
     id:number,
@@ -10,6 +11,7 @@ export interface UserType {
 }
 
 function Header({user}:{user:AxiosResponse}) {
+    const navigate=useNavigate()
 
     const logoutRequest=async()=>{
         const data=axios.post("http://localhost:5000/logout")
@@ -25,7 +27,11 @@ function Header({user}:{user:AxiosResponse}) {
         },
       })
 
+      const handleLogout=async ()=>{
+             mutation.mutate()
+            navigate("/login")
 
+      }
 
   return (
     
@@ -56,7 +62,7 @@ function Header({user}:{user:AxiosResponse}) {
           <Dropdown.Item>Settings</Dropdown.Item>
           <Dropdown.Item>Earnings</Dropdown.Item>
           <Dropdown.Divider />
-          <Dropdown.Item onClick={mutation.mutate}>Sign out</Dropdown.Item>
+          <Dropdown.Item onClick={handleLogout}>Sign out</Dropdown.Item>
         </Dropdown>
         <Navbar.Toggle />
       </div>

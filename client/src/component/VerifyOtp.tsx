@@ -1,23 +1,37 @@
 import { useMutation} from '@tanstack/react-query';
 import axios from 'axios';
-import {  FormEvent, useState } from 'react';
+import {  FormEvent, useEffect, useState } from 'react';
 import OtpInput from 'react-otp-input';
+import { useNavigate } from 'react-router-dom';
 
-function VerifyOtp({requestId}:{requestId:string | null }) {
+function VerifyOtp({requestId,user}:{requestId:string | null,user:string | null}) {
 
-  
+    const [disableButton, setdisableButton] = useState(true)
+    const [requestID2, setrequestID2] = useState(requestId)
+    const [timer, settimer] = useState(0)
+
+    useEffect(()=>{
+      let countdown = 60; // 60 seconds
+      const countdownInterval = setInterval(() => {
+          if (countdown <= 0) {
+              clearInterval(countdownInterval);
+              setdisableButton(false);
+              return;
+          }
+          settimer(countdown)
+          countdown--;
+      }, 1000);
+    },[])
 
 
     const [otp, setOtp] = useState('');
 
-    
+    const navigate=useNavigate()
 
 
     const mutation = useMutation({
       mutationFn:async () => {
-        // const fromdata=new FormData()
-        // fromdata.append("otp",otp)
-        // fromdata.append("request_id",requestId)
+        
         if(otp==""){
           return
         }
@@ -29,21 +43,75 @@ function VerifyOtp({requestId}:{requestId:string | null }) {
           'Content-Type': 'application/x-www-form-urlencoded'
           },
           data : {
-            otp,request_id: requestId
+            otp,request_id: requestID2,user
           }
           };
-        const respone=await axios.request(config)
+        const response=await axios.request(config)
           
 0
-        return respone
+        return response
       },
+
+      onSuccess:()=>{
+        navigate("/")
+      },
+      
+      onError:(err)=>{
+        console.log(err);
+        
+      }
+    })
+
+    const mutationResend = useMutation({
+      mutationFn:async () => {
+        
+        // if(!requestId || !user){
+
+        // }
+        
+        const config = {
+          method: 'post',
+          maxBodyLength: Infinity,
+          url: 'http://localhost:5000/resendotp',
+          headers: { 
+          'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          data : {
+            request_id: requestId,user,
+            
+          }
+          };
+        const response=await axios.request(config)
+          
+0
+        return response
+      },
+
+      onSuccess:(data)=>{
+        // navigate("/")
+        // console.log(data.data);
+        setrequestID2(data.data.request_id)
+        
+        console.log("reqquest seccess");
+        
+      },
+      onError:(err)=>{
+        console.log(err);
+        
+      }
     })
 
     const handleSubmit=async(event:FormEvent)=>{
       event.preventDefault()
-    await mutation.mutate()
+     mutation.mutate()
     
       
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleResend=async(event:FormEvent)=>{
+      event.preventDefault()
+      mutationResend.mutate()
     }
     
 
@@ -85,7 +153,11 @@ function VerifyOtp({requestId}:{requestId:string | null }) {
               </div>
 
               <div className="flex flex-row items-center justify-center text-center text-sm font-medium space-x-1 text-gray-500">
-                <p>Didn't recieve code?</p> <a className="flex flex-row items-center text-blue-600" href="http://" target="_blank" rel="noopener noreferrer">Resend</a>
+                <p>Didn't recieve code?</p>
+                <div>{timer}</div>
+                 <button className="flex flex-row items-center text-blue-600" 
+                 disabled={disableButton}
+                  onClick={handleResend} >Resend</button>
               </div>
             </div>
           </div>

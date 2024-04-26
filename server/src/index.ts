@@ -15,8 +15,15 @@ import path from "path";
 import { connection, options } from "./db/connection";
 import { sendOtp } from "./middleware/sendOtp";
 import { isAuthenticated } from "./middleware/isAuthenticated";
+import { FieldPacket, RowDataPacket } from "mysql2";
+import { differenceInSeconds } from "date-fns";
 
 const SqlStore = MySQLStore(session as any);
+
+function maskPhoneNumber(phoneNumber:string) {
+  const masked = 'X'.repeat(phoneNumber.length - 2) + phoneNumber.slice(-2);
+  return masked;
+}
 
 const sessionStore = new SqlStore(options);
 
@@ -34,6 +41,7 @@ export interface MyJwtPayload {
 }
 interface CustomSession extends SessionData {
   user?: string; // Define 'user' property as optional
+  created_at?:Date
 }
 
 app.use(
@@ -53,155 +61,356 @@ app.use(
 );
 
 app.post("/verifyotp", async (req: Request, res: Response) => {
+
+  
+
   try {
-    let user = 8;
+    
 
-    const { request_id } = req.body;
+    const { request_id,user,otp } = req.body;
 
-    if (!user || !request_id) {
-      return res.status(400).send("user or request id not available");
+    if (!user || !request_id || !otp) {
+      return res.status(400).json({message:"user or request id not available"});
     }
 
-    connection.query(
+    const [userRows, userFields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
       "SELECT * from user where id=?",
-      [user],
-      async function (err, results: any, fields) {
-        if (!results || results.length == 0) {
-          return res.status(400).send("user not found");
-        }
-
-        const databaseUser = results[0];
-
-        if (
-          databaseUser.request_id === request_id &&
-          databaseUser.otp === req.body.otp
-        ) {
-          if (req.session) {
-            (req.session as CustomSession).user = databaseUser.id;
-          }
-
-          const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
-
-          res.cookie("token", token, { httpOnly: true, secure: true });
-
-          return res.status(201).send("seccess");
-        }
-      }
+      [user]
     );
+    
+
+    if (!userRows || userRows?.length == 0) {
+      return res.status(400).json({message:"user not found"});
+    }
+
+    const databaseUser = userRows[0];
+
+    const result = differenceInSeconds(
+      new Date(),
+      new Date(databaseUser?.otp_expiry),
+    )
+
+    if(result > 120){
+      return res.status(400).json({message:"OTP expire"})
+    }
+
+
+    if (
+      databaseUser.request_id === request_id &&
+      databaseUser.otp === otp
+    ) {
+
+
+      const [sessionRows, sessionFields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+        `SELECT * FROM sessions WHERE JSON_EXTRACT(user, '$.user') = ${user};`,
+        // [user]
+      );
+
+      
+      
+  
+      // if (sessionFields &&  sessionFields.length > 0) {
+        for (let i = 0; i < sessionRows?.length; i++) {
+          try {
+            const element = sessionRows[i];
+            await connection.query("DELETE FROM sessions WHERE session_id = ? ", [
+              element.session_id,
+            ]);
+          } catch (error) {
+            return res.status(400).send("Something went wrong");
+          }
+        }
+      // }
+  
+
+
+      if (req.session) {
+        (req.session as CustomSession).user = databaseUser.id;
+        (req.session as CustomSession).created_at = new Date();
+      }
+
+      const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
+
+      res.cookie("token", token, { httpOnly: true, secure: true });
+
+      return res.status(201).json({message:"Login successfully"});
+    }else{
+      return res.status(400).json({message:"Wrong otp"});
+    }
   } catch (error) {
     console.log(error);
+    return res.status(500).json({message:"Something went wrong"});
   }
 });
+
+
+
+app.post("/resetotpverify", async (req: Request, res: Response) => {
+
+  
+
+  try {
+    
+
+    const { request_id,user,otp } = req.body;
+
+
+    if (!user || !request_id || !otp) {
+      return res.status(400).json({message:"user or request id not available"});
+    }
+
+    const [userRows, userFields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+      "SELECT * from user where id=?",
+      [user]
+    );
+    
+
+    if (!userRows || userRows?.length == 0) {
+      return res.status(400).json({message:"user not found"});
+    }
+
+    const databaseUser = userRows[0];
+
+    if (
+      databaseUser.request_id === request_id &&
+      databaseUser.otp === otp
+    ) {
+
+
+      const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
+
+      res.cookie("token", token, { httpOnly: true, secure: true });
+
+      return res.status(201).json({message:"OTP verified"});
+    }else{
+      return res.status(400).json({message:"Wrong otp"});
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({message:"Something went wrong"});
+  }
+});
+
+
+
+app.post("/passwordreset",async(req,res)=>{
+  console.log("hiii");
+  
+  try {
+    const {otp,request_id,password,email} =req.body
+    const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+      "SELECT * FROM user WHERE email = ?",
+      [email]
+    );
+
+    
+
+    const user=rows?.[0]
+    
+    
+    const cookieValue = req?.headers?.cookie?.split(";");
+
+    let token;
+
+    cookieValue?.forEach((element: string) => {
+      if (element?.trim().startsWith("token")) {
+        token = element.split("=")[1];
+      }
+    });
+
+    // token is not set
+    if(!token) return res.status(400).json({message:"Something went wrong"})
+
+
+    const jwtUser = jwt.verify(token, "strongsecrect") as MyJwtPayload;
+    
+    
+
+
+    if(jwtUser.user!=user.id) return res.status(400).json({message:"Something went wrong not same user"})
+
+      const salt = process.env.JWT_SECRECT as string;
+    const hash = crypto.createHmac("sha512", salt).update(password);
+
+    const hashpassword = hash.digest("hex");
+
+    if(user.otp===otp && user.request_id===request_id && email ===user.email){
+      const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+        "UPDATE  user set password = ? where id = ?",
+        [hashpassword,user.id]
+      );
+    }
+
+    return res.status(201).send({message:"Password update successfully"})
+
+  } catch (error) {
+    console.log(error);
+        return res.status(500).json({message:"Something went wrong"});
+  }
+})
+
+app.post("/resetpassword",async(req:Request,res:Response)=>{
+      try {
+        const {email}=req.body
+
+        const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+          "SELECT id, email, otp_expiry, mobile FROM user WHERE email = ?",
+          [email]
+        );
+
+
+        const user=rows?.[0]
+
+        const response = await sendOtp(user.mobile);
+
+    if (response) {
+      const { otp, messages } = response;
+      await connection.query(
+        "UPDATE user SET otp=?, otp_expiry = NOW() + INTERVAL 1 MINUTE , request_id=?  where id= ?",
+        [otp, messages?.sid, user?.id]
+      );
+
+      return res.status(201).json({ request_id: messages.sid ,user:user?.id,mobile:maskPhoneNumber(user.mobile)});
+    }
+    
+        
+      } catch (error) {
+        console.log(error);
+        return res.status(500).json({message:"Something went wrong"});
+        
+      }
+})
+
+
+
+app.post("/resendotp",async(req:Request,res:Response)=>{
+  try {
+
+    
+const {user,request_id} =req.body
+    // const user=8
+    // const request_id='SM2952f4a7121ba8110d060c3381d33a0c'
+    // SM76c5833fa87b2e689f61d35e039cc098
+    if(!user || !request_id){
+      return  res.status(400).json({message:"Please provide user and request id"})
+    }
+
+    const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+      "SELECT id, email, otp_expiry, mobile FROM user WHERE id = ? AND request_id = ?",
+      [user,request_id,]
+    );
+
+    
+    
+
+    
+    
+    const result = differenceInSeconds(
+      new Date(),
+      new Date(rows[0]?.otp_expiry),
+    )
+
+    if(result <= 60){
+      return res.status(400).json({message:"Please wait sometime"})
+    }
+
+    if(result > 300) {
+      return res.status(400).json({message:"OTP expire please login again"})
+    }
+
+   const response= await sendOtp(rows?.[0]?.mobile)
+
+    if (response) {
+      const { otp, messages } = response;
+      await connection.query(
+        "UPDATE user SET otp=?, otp_expiry = NOW() + INTERVAL 1 MINUTE , request_id=?  where id= ?",
+        [otp, messages?.sid, rows[0]?.id]
+      );
+
+      return res.status(201).json({ request_id: messages.sid ,user:rows[0]?.id});
+    }
+    
+
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({message:"Something went wrong"});
+    
+  }
+})
+
+
 
 app.post("/login", async (req: any, res: Response) => {
   try {
     const { email, password } = req.body;
 
     if (!email && !password) {
-      return res.send("please provide email and password");
+      return res.status(400).json({message:"please provide email and password"});
     }
-    if (req.session) {
-      req.session.destroy(8, function (err: any) {});
-    }
+    // if (req.session) {
+    //   req.session.destroy(8, function (err: any) {});
+    // }
     const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
     const hashpassword = hash.digest("hex");
 
-    connection?.query(
+    const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
       "SELECT id, email, password,mobile FROM user WHERE email = ?",
-      [email],
-      async function (err, results: any, fields) {
-        if (err) {
-          return res.status(500).send("Internal Server Error");
-        }
-
-        const user = results[0];
-
-        if (!user) {
-          return res.status(401).send("Invalid email or password");
-        }
-
-        if (hashpassword !== user.password) {
-          return res.status(401).send("Invalid email or password");
-        }
-
-        connection.query(
-          "SELECT id FROM sessions WHERE JSON_EXTRACT(data, '$.user') = ?;",
-          [user.id],
-          async function (err, results: any, fields) {
-            if (results &&  results.length > 0) {
-              for (let i = 0; i < results.length; i++) {
-                try {
-                  const element = results[i];
-                 await connection.query("DELETE FROM sessions WHERE id = ? ", [
-                    element.id,
-                  ]);
-                } catch (error) {
-                  return res.status(400).send("Something went wrong");
-                }
-              }
-            }
-          }
-        );
-
-        const response = await sendOtp(user.mobile);
-
-        if (response) {
-          const { otp, messages } = response;
-          connection.query(
-            "UPDATE user SET otp=?, otp_expiry = NOW() + INTERVAL 1 MINUTE , request_id=?  where id= ?",
-            [otp, messages?.sid, user?.id]
-          );
-
-          return res.status(201).json({ request_id: messages.sid });
-        }
-      }
+      [email]
     );
+
+   
+
+    const user = rows?.[0];
+
+    
+
+    if (hashpassword !== user?.password || !user ) {
+      return res.status(400).json({message:"Invalid email or password"});
+    }
+
+    
+   
+
+    const response = await sendOtp(user.mobile);
+
+    if (response) {
+      const { otp, messages } = response;
+      await connection.query(
+        "UPDATE user SET otp=?, otp_expiry = NOW() + INTERVAL 1 MINUTE , request_id=?  where id= ?",
+        [otp, messages?.sid, user?.id]
+      );
+
+      return res.status(201).json({ request_id: messages.sid ,user:user?.id});
+    }
+
   } catch (error) {
-    console.log(error);
+    return res.status(500).json({message:"Something went wrong"});
   }
 });
 
 app.post("/signup", async (req: Request, res: Response) => {
   try {
-    const { fullname, email, username, password, mobile } = req.body;
+    const { fullname, email, username, password, mobile,mobile_county_code } = req.body;
     const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
     const hashpassword = hash.digest("hex");
 
-    connection.query(
-      "INSERT INTO user (fullname,email,username,password,mobile) VALUES (?,?,?,?,?)",
-      [fullname, email, username, hashpassword, mobile]
+   await connection.query(
+      "INSERT INTO user (fullname,email,username,password,mobile,mobile_county_code) VALUES (?,?,?,?,?,?)",
+      [fullname, email, username, hashpassword, mobile,mobile_county_code]
     );
 
-    res.send("User created");
+    return res.status(201).json({message:"User created"});
   } catch (error) {
     console.log(error);
 
-    res.send(error);
+    return res.status(500).json({message:"Something went wrong"});
   }
 });
 
-app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    if (req.session) {
-      connection?.query(
-        "SELECT id, email, username,fullname FROM user WHERE id = ?",
-        [(req.session as CustomSession)?.user],
-        async function (err, results: any, fields) {
-          if (err) return res.status(400).send("Something went wrong");
-          return res.status(200).json(results[0]);
-        }
-      );
-    } else {
-      return res.status(401).send("unauthorized");
-    }
-  } catch (error) {
-    console.log(error);
-  }
-});
 
 app.post("/logout", isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -213,6 +422,44 @@ app.post("/logout", isAuthenticated, async (req: Request, res: Response) => {
     console.log(error);
   }
 });
+
+
+app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    if (req.session) {
+
+
+      const [rows, fields]: [RowDataPacket[], FieldPacket[]] = await connection.query(
+        "SELECT id, email, username,fullname FROM user WHERE id = ?",
+        [(req.session as CustomSession)?.user]
+      );
+
+      if(rows && rows.length>0){
+        return res.status(200).json(rows[0])
+      }else{
+        return res.status(400).json({messge:"something went wrong"})
+      }
+  
+
+    
+    } else {
+      return res.status(401).send("unauthorized");
+    }
+  } catch (error) {
+    console.log(error);
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
 
 app.use(express.static(path.join(__dirname, "../../client/dist")));
 
