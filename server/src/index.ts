@@ -2,6 +2,7 @@ import express, { Express, Request, RequestHandler, Response } from "express";
 import dotenv from "dotenv";
 dotenv.config();
 // import cors from "cors";
+import * as OTPAuth from "otpauth";
 
 import crypto from "crypto";
 
@@ -17,11 +18,44 @@ import { sendOtp } from "./middleware/sendOtp";
 import { isAuthenticated } from "./middleware/isAuthenticated";
 import { FieldPacket, RowDataPacket } from "mysql2";
 import { differenceInSeconds } from "date-fns";
+import QRCode from "qrcode"
+import { v4 as uuidv4 } from 'uuid';
+
 
 const SqlStore = MySQLStore(session as any);
 
+// const secrectHex=crypto.randomBytes(48).toString('hex')
+
+// const secrect=OTPAuth.Secret.fromHex(secrectHex)
+
+
+
+
+// let totp = new OTPAuth.TOTP({
+//   issuer: "Auth",
+//   label: "Authapp",
+//   algorithm: "SHA1",
+//   digits: 6,
+//   period: 60,
+//   secret: secrect, // or 'OTPAuth.Secret.fromBase32("NB2W45DFOIZA")'
+// });
+
+
+
+
+// let uri = totp.toString();
+
+// QRCode.toString(uri,{type:"terminal"},(err,data)=>{
+//   console.log(data);
+  
+// })
+
+
+// const delta =totp.validate({token:"",window:1})
+
+const newLocal = "X";
 function maskPhoneNumber(phoneNumber: string) {
-  const masked = "X".repeat(phoneNumber.length - 2) + phoneNumber.slice(-2);
+  const masked = newLocal.repeat(phoneNumber.length - 2) + phoneNumber.slice(-2);
   return masked;
 }
 
@@ -62,7 +96,9 @@ app.use(
 
 app.post("/verifyotp", async (req: Request, res: Response) => {
   try {
-    const { request_id, user, otp } = req.body;
+    const { request_id, user, otp,type } = req.body;
+    console.log(type);
+    
 
     if (!user || !request_id || !otp) {
       return res
@@ -78,6 +114,82 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
     }
 
     const databaseUser = userRows[0];
+
+    if(databaseUser.totp_active && (databaseUser.request_id==request_id) && type=='true'){
+      console.log(databaseUser.totp_key);
+      
+      const totp = new OTPAuth.TOTP({
+        issuer: "Auth",
+        label: "Authapp",
+        algorithm: "SHA1",
+        digits: 6,
+        period: 30,
+        secret: databaseUser.totp_key, 
+      });
+
+      
+      
+  
+
+//       let uri = totp.toString();
+
+// QRCode.toString(uri,{type:"terminal"},(err,data)=>{
+//   console.log(data);
+  
+// })
+
+      
+      
+      // const delta =totp.validate({token:otp,window:1})
+
+      // console.log(delta);
+      
+      
+      
+
+      if(totp.generate()==otp){
+        console.log("in delta");
+        
+        const [sessionRows, sessionFields]: [RowDataPacket[], FieldPacket[]] =
+        await connection.query(
+          `SELECT * FROM sessions WHERE JSON_EXTRACT(user, '$.user') = ${user};`
+          // [user]
+        );
+
+      for (let i = 0; i < sessionRows?.length; i++) {
+        try {
+          const element = sessionRows[i];
+          await connection.query("DELETE FROM sessions WHERE session_id = ? ", [
+            element.session_id,
+          ]);
+        } catch (error) {
+          return res.status(400).json({message:"Something went wrong11"});
+        }
+      }
+
+      if (req?.session) {
+        // console.log("no sessios");
+        
+        (req.session as CustomSession).user = databaseUser.id;
+        (req.session as CustomSession).created_at = new Date();
+      }else{
+        return res.status(400).json({message:"Something went wrong111"});
+      }
+
+      const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
+
+      res.cookie("token", token, { httpOnly: true, secure: true });
+
+      return res.status(201).json({ message: "Login successfully" });
+      }else{
+        return res.status(400).json({message:"Something went wrong555"});
+      }
+
+      
+
+    }
+
+
 
     const result = differenceInSeconds(
       new Date(),
@@ -95,7 +207,6 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
           // [user]
         );
 
-      
       for (let i = 0; i < sessionRows?.length; i++) {
         try {
           const element = sessionRows[i];
@@ -106,11 +217,12 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
           return res.status(400).send("Something went wrong");
         }
       }
-      
 
       if (req?.session) {
         (req.session as CustomSession).user = databaseUser.id;
         (req.session as CustomSession).created_at = new Date();
+      }else{
+        return res.status(400).send("Something went wrong");
       }
 
       const token = jwt.sign({ user: databaseUser.id }, "strongsecrect");
@@ -306,9 +418,7 @@ app.post("/login", async (req: any, res: Response) => {
         .status(400)
         .json({ message: "please provide email and password" });
     }
-    // if (req.session) {
-    //   req.session.destroy(8, function (err: any) {});
-    // }
+    
     const salt = process.env.JWT_SECRECT as string;
     const hash = crypto.createHmac("sha512", salt).update(password);
 
@@ -316,7 +426,7 @@ app.post("/login", async (req: any, res: Response) => {
 
     const [rows, fields]: [RowDataPacket[], FieldPacket[]] =
       await connection.query(
-        "SELECT id, email, password,mobile FROM user WHERE email = ?",
+        "SELECT id, email, password,mobile, totp_active FROM user WHERE email = ?",
         [email]
       );
 
@@ -326,7 +436,25 @@ app.post("/login", async (req: any, res: Response) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const response = await sendOtp(user.mobile);
+    let response;
+
+    if(user.totp_active){
+      
+
+        response={
+          otp:"TOTP",
+          messages:{
+            sid:uuidv4()
+          }
+        }
+
+      // return res.status(201).json({ request_id: secrect.base32, user: user?.id });
+    }else{
+      response = await sendOtp(user.mobile);
+    }
+
+
+    
 
     if (response) {
       const { otp, messages } = response;
@@ -335,7 +463,7 @@ app.post("/login", async (req: any, res: Response) => {
         [otp, messages?.sid, user?.id]
       );
 
-      return res.status(201).json({ request_id: messages.sid, user: user?.id });
+      return res.status(201).json({ request_id: messages.sid, user: user?.id ,totp_status:user.totp_active==1?true:false});
     }
   } catch (error) {
     return res.status(500).json({ message: "Something went wrong" });

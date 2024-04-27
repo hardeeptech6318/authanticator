@@ -16,6 +16,7 @@ function Login() {
   const [requestId, setrequestId] = useState(null)
   const [user, setuser] = useState(null)
   const [errorMsg, seterrorMsg] = useState(null)
+  const [totp_status, settotp_status] = useState(false)
 
   const {
     register,
@@ -43,6 +44,7 @@ const response=await axios.request(config)
 
 setrequestId(response.data?.request_id)
 setuser(response.data?.user)
+settotp_status(response.data.totp_status)
 toast.success("OTP send")
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } catch (error:any) {
@@ -82,7 +84,7 @@ seterrorMsg(error?.response?.data.message)
     </div>
   </section>:
 
-  <VerifyOtp user={user} requestId={requestId}/>
+  <VerifyOtp user={user} totp_status={totp_status} requestId={requestId}/>
   
 }
   </>

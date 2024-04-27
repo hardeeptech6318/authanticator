@@ -2,12 +2,12 @@ import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-qu
 import { AxiosError } from 'axios';
 
 import React from 'react'
-import {  useNavigate } from 'react-router-dom';
+// import {  useNavigate } from 'react-router-dom';
 
 
 function Authenticator({children}:{children:React.ReactNode}) {
 
-    const navigate= useNavigate();
+    // const navigate= useNavigate();
 
     const queryClient = new QueryClient({
       defaultOptions:{
@@ -24,7 +24,9 @@ function Authenticator({children}:{children:React.ReactNode}) {
             const axiosError = error as AxiosError; // Type assertion
             if (axiosError.response && axiosError.response.status === 401) {
               // Redirect to the login page
-              navigate('/login', { replace: true });
+              console.log(error);
+              
+              // navigate('/login', { replace: true });
             }
           
      

@@ -4,6 +4,7 @@ import Home from "./route/Home"
 import Login from "./route/Login"
 import SignUp from "./route/SignUp"
 import Forgotpassword from "./route/Forgotpassword";
+import Profile from "./route/Profile";
 
 
 
@@ -16,6 +17,7 @@ function App() {
       { <Route path="/" element={<Home />} />}
       <Route path="/forgotpassword" element={<Forgotpassword/>} />
       <Route path="/login" element={<Login />} />
+      <Route path="/profile" element={<Profile />} />
       <Route path="/signup" element={<SignUp />} />
     </Routes>
     </div>

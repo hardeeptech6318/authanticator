@@ -8,13 +8,17 @@ import { useNavigate } from "react-router-dom";
 function VerifyOtp({
   requestId,
   user,
+  totp_status
 }: {
   requestId: string | null;
   user: string | null;
+  totp_status:boolean
 }) {
   const [disableButton, setdisableButton] = useState(true);
   const [requestID2, setrequestID2] = useState(requestId);
   const [timer, settimer] = useState(0);
+  const [totp, settotp] = useState(totp_status)
+  
 
   useEffect(() => {
     let countdown = 60; // 60 seconds
@@ -49,6 +53,7 @@ function VerifyOtp({
           otp,
           request_id: requestID2,
           user,
+          type:totp
         },
       };
       const response = await axios.request(config);
@@ -71,7 +76,6 @@ function VerifyOtp({
   const mutationResend = useMutation({
     mutationFn: async () => {
       if(!requestId || !user){
-          console.log("dsf");
           toast.error("Please retry again")
 
       }
@@ -97,6 +101,7 @@ function VerifyOtp({
     onSuccess: (data) => {
       
       setrequestID2(data.data.request_id);
+      settotp(false)
 
       
     },
@@ -122,16 +127,19 @@ function VerifyOtp({
         <div className="mx-auto flex w-full max-w-md flex-col space-y-16">
           <div className="flex flex-col items-center justify-center text-center space-y-2">
             <div className="font-semibold text-3xl">
-              <p>Email Verification</p>
+              <p>Mobile verification</p>
             </div>
             <div className="flex flex-row text-sm font-medium text-gray-400">
-              <p>We have sent a code to your email ba**@dipainhouse.com</p>
+              <p>We have sent a code to your mobile no.</p>
             </div>
           </div>
 
           <div>
             <form action="" method="post" onSubmit={handleSubmit}>
               <div className="flex flex-col space-y-16">
+                <label>
+                  {totp ? "Enter TOTP":"Enter OTP"}
+                </label>
                 <OtpInput
                   value={otp}
                   inputType="number"
@@ -151,11 +159,11 @@ function VerifyOtp({
                   </div>
 
                   <div className="flex flex-row items-center justify-center text-center text-sm font-medium space-x-1 text-gray-500">
-                    <p>Didn't recieve code?</p>
-                    <div>{timer}</div>
+                    <p>{totp ?"Send OTP to register mobile no.":" Didn't recieve code?"}</p>
+                    {!totp && <div>{timer}</div>}
                     <button
                       className="flex flex-row items-center text-blue-600"
-                      disabled={disableButton}
+                      disabled={totp?false:disableButton}
                       onClick={handleResend}
                     >
                       Resend
