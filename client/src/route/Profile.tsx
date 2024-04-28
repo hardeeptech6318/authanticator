@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import axios from "axios"
-import { useState } from "react"
+import {  useEffect, useState } from "react"
 import { ToggleSwitch } from "flowbite-react";
 
 interface TotpResponseTypes{
@@ -15,10 +15,15 @@ function Profile() {
         return user
       }
       const query = useQuery({ queryKey: ['getuser'], queryFn: getUser })
+      
+      
       const [switch1, setSwitch1] = useState(query.data?.data.totp_active);
       const [response, setresponse] = useState<TotpResponseTypes>({qrimage:null,code:null})
 
-    
+      useEffect(()=>{
+            setSwitch1(query.data?.data.totp_active)
+      },[query?.data?.data?.totp_active])
+
       const mutation = useMutation({
         mutationFn: async (e:boolean) => {
           
@@ -40,8 +45,9 @@ function Profile() {
         },
     
         onSuccess: (data) => {
-            console.log(data);
+            
             setresponse(data.data)
+            
             
         //   navigate("/");
         },
@@ -145,13 +151,25 @@ function Profile() {
                         </div> */}
 
                         
-<ToggleSwitch checked={switch1} label="Toggle me" onChange={(e)=>{setSwitch1(e);mutation.mutate(e)}} />
+<ToggleSwitch checked={switch1} label={`${switch1?"Preview totp secrect":'Enable totp'}`} onChange={(e)=>{setSwitch1(e);mutation.mutate(e)}} />
 
-{ switch1 && response?.qrimage && <div>
+
+
+{ switch1 &&
+<>
+<button onClick={()=>mutation.mutate(true)} >Show code</button>
+
+{
+response?.qrimage && response?.code &&
+
+<div>
     
     <img src={response?.qrimage} alt="qrcode"/>
     <div>{response?.code}</div>
-    </div>}
+    </div>
+}
+    </>
+    }
 
 
                     </div>

@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import axios, { AxiosResponse } from "axios";
 import { Avatar, Dropdown, Navbar } from "flowbite-react";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export interface UserType {
   id: number;
@@ -57,10 +57,12 @@ function Header({ user }: { user: AxiosResponse }) {
           }
         >
           <Dropdown.Header>
+            <Link to="/profile">
             <span className="block text-sm">{user.data.username}</span>
             <span className="block truncate text-sm font-medium">
               {user.data.email}
             </span>
+            </Link>
           </Dropdown.Header>
           <Dropdown.Item>Dashboard</Dropdown.Item>
           <Dropdown.Item>Settings</Dropdown.Item>

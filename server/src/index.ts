@@ -22,6 +22,7 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { verifytotp } from "./lib/verifyotp";
 import { deleteSessions } from "./lib/deleteSessions";
+import helmet from "helmet";
 
 const SqlStore = MySQLStore(session as any);
 
@@ -35,10 +36,9 @@ function maskPhoneNumber(phoneNumber: string) {
 const sessionStore = new SqlStore(options);
 
 const app: Express = express();
+app.use(helmet());
 
-// app.use(express.json());
 
-// app.use(cors());
 app.use(express.urlencoded({ extended: true }));
 
 const port = process.env.PORT || 5000;
@@ -463,6 +463,8 @@ app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
           "SELECT id, email, username,fullname,totp_active FROM user WHERE id = ?",
           [(req.session as CustomSession)?.user]
         );
+
+        rows[0].totp_active=rows[0].totp_active==1?true:false
 
       if (rows && rows.length > 0) {
         return res.status(200).json(rows[0]);
