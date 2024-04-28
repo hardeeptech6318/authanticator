@@ -1,6 +1,60 @@
+import { useMutation, useQuery } from "@tanstack/react-query"
+import axios from "axios"
+import { useState } from "react"
+import { ToggleSwitch } from "flowbite-react";
+
+interface TotpResponseTypes{
+    qrimage:string | null,
+    code:string | null
+}
 
 
 function Profile() {
+    const getUser=async()=>{
+        const user= await axios.get("http://localhost:5000/api/user")
+        return user
+      }
+      const query = useQuery({ queryKey: ['getuser'], queryFn: getUser })
+      const [switch1, setSwitch1] = useState(query.data?.data.totp_active);
+      const [response, setresponse] = useState<TotpResponseTypes>({qrimage:null,code:null})
+
+    
+      const mutation = useMutation({
+        mutationFn: async (e:boolean) => {
+          
+          const config = {
+            method: "post",
+            maxBodyLength: Infinity,
+            url: "http://localhost:5000/totpactivate",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data: {
+             totp_active:e
+            },
+          };
+          const response = await axios.request(config);
+    
+          
+          return response;
+        },
+    
+        onSuccess: (data) => {
+            console.log(data);
+            setresponse(data.data)
+            
+        //   navigate("/");
+        },
+    
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onError: (err:any) => {
+            console.log(err);
+            
+          
+        //   toast.error(err?.data?.message)
+        },
+      });
+      
   return (
     
   
@@ -37,12 +91,13 @@ function Profile() {
                                 
                                     className="block mb-2 text-sm font-medium text-indigo-900 dark:text-white">Your
                                     first name</label>
-                                <input type="text" id="first_name"
+                                    <div>{query.data?.data.fullname}</div>
+                                {/* <input type="text" id="first_name"
                                     className="bg-indigo-50 border border-indigo-300 text-indigo-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 "
-                                    placeholder="Your first name" value="Jane" required/>
+                                    placeholder="Your first name" value="Jane" required/> */}
                             </div>
 
-                            <div className="w-full">
+                            {/* <div className="w-full">
                                 <label 
                                 // for="last_name"
                                     className="block mb-2 text-sm font-medium text-indigo-900 dark:text-white">Your
@@ -50,7 +105,7 @@ function Profile() {
                                 <input type="text" id="last_name"
                                     className="bg-indigo-50 border border-indigo-300 text-indigo-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 "
                                     placeholder="Your last name" value="Ferguson" required/>
-                            </div>
+                            </div> */}
 
                         </div>
 
@@ -59,21 +114,22 @@ function Profile() {
                             // for="email"
                                 className="block mb-2 text-sm font-medium text-indigo-900 dark:text-white">Your
                                 email</label>
-                            <input type="email" id="email"
+                                <div>{query.data?.data.email}</div>
+                            {/* <input type="email" id="email"
                                 className="bg-indigo-50 border border-indigo-300 text-indigo-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 "
-                                placeholder="your.email@mail.com" required/>
+                                placeholder="your.email@mail.com" required/> */}
                         </div>
 
-                        <div className="mb-2 sm:mb-6">
+                        {/* <div className="mb-2 sm:mb-6">
                             <label 
                             // for="profession"
                                 className="block mb-2 text-sm font-medium text-indigo-900 dark:text-white">Profession</label>
                             <input type="text" id="profession"
                                 className="bg-indigo-50 border border-indigo-300 text-indigo-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 "
                                 placeholder="your profession" required/>
-                        </div>
+                        </div> */}
 
-                        <div className="mb-6">
+                        {/* <div className="mb-6">
                             <label 
                             // for="message"
                                 className="block mb-2 text-sm font-medium text-indigo-900 dark:text-white">Bio</label>
@@ -81,12 +137,22 @@ function Profile() {
                             // rows="4"
                                 className="block p-2.5 w-full text-sm text-indigo-900 bg-indigo-50 rounded-lg border border-indigo-300 focus:ring-indigo-500 focus:border-indigo-500 "
                                 placeholder="Write your bio here..."></textarea>
-                        </div>
-
+                        </div> */}
+{/* 
                         <div className="flex justify-end">
                             <button type="submit"
                                 className="text-white bg-indigo-700  hover:bg-indigo-800 focus:ring-4 focus:outline-none focus:ring-indigo-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-indigo-600 dark:hover:bg-indigo-700 dark:focus:ring-indigo-800">Save</button>
-                        </div>
+                        </div> */}
+
+                        
+<ToggleSwitch checked={switch1} label="Toggle me" onChange={(e)=>{setSwitch1(e);mutation.mutate(e)}} />
+
+{ switch1 && response?.qrimage && <div>
+    
+    <img src={response?.qrimage} alt="qrcode"/>
+    <div>{response?.code}</div>
+    </div>}
+
 
                     </div>
                 </div>

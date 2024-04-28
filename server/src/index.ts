@@ -97,7 +97,7 @@ app.use(
 app.post("/verifyotp", async (req: Request, res: Response) => {
   try {
     const { request_id, user, otp,type } = req.body;
-    console.log(type);
+    
     
 
     if (!user || !request_id || !otp) {
@@ -115,8 +115,8 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
 
     const databaseUser = userRows[0];
 
-    if(databaseUser.totp_active && (databaseUser.request_id==request_id) && type=='true'){
-      console.log(databaseUser.totp_key);
+    if(databaseUser.totp_active == 1 && (databaseUser.request_id==request_id) && type=='true'){
+      
       
       const totp = new OTPAuth.TOTP({
         issuer: "Auth",
@@ -127,33 +127,16 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
         secret: databaseUser.totp_key, 
       });
 
-      
-      
-  
-
-//       let uri = totp.toString();
-
-// QRCode.toString(uri,{type:"terminal"},(err,data)=>{
-//   console.log(data);
-  
-// })
-
-      
-      
-      // const delta =totp.validate({token:otp,window:1})
-
-      // console.log(delta);
-      
+      console.log(totp.generate());
       
       
 
       if(totp.generate()==otp){
-        console.log("in delta");
+        
         
         const [sessionRows, sessionFields]: [RowDataPacket[], FieldPacket[]] =
         await connection.query(
           `SELECT * FROM sessions WHERE JSON_EXTRACT(user, '$.user') = ${user};`
-          // [user]
         );
 
       for (let i = 0; i < sessionRows?.length; i++) {
@@ -168,7 +151,7 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
       }
 
       if (req?.session) {
-        // console.log("no sessios");
+        
         
         (req.session as CustomSession).user = databaseUser.id;
         (req.session as CustomSession).created_at = new Date();
@@ -204,7 +187,7 @@ app.post("/verifyotp", async (req: Request, res: Response) => {
       const [sessionRows, sessionFields]: [RowDataPacket[], FieldPacket[]] =
         await connection.query(
           `SELECT * FROM sessions WHERE JSON_EXTRACT(user, '$.user') = ${user};`
-          // [user]
+          
         );
 
       for (let i = 0; i < sessionRows?.length; i++) {
@@ -438,11 +421,11 @@ app.post("/login", async (req: any, res: Response) => {
 
     let response;
 
-    if(user.totp_active){
+    if(user.totp_active ==1){
       
 
         response={
-          otp:"TOTP",
+          otp:null,
           messages:{
             sid:uuidv4()
           }
@@ -466,6 +449,8 @@ app.post("/login", async (req: any, res: Response) => {
       return res.status(201).json({ request_id: messages.sid, user: user?.id ,totp_status:user.totp_active==1?true:false});
     }
   } catch (error) {
+    console.log(error);
+    
     return res.status(500).json({ message: "Something went wrong" });
   }
 });
@@ -502,12 +487,65 @@ app.post("/logout", isAuthenticated, async (req: Request, res: Response) => {
   }
 });
 
+app.post("/totpactivate",isAuthenticated,async(req,res)=>{
+  try {
+    const {totp_active}=req.body
+
+   const [rows, fields]: [RowDataPacket[], FieldPacket[]] =await connection.query("SELECT * from user where id = ?",[(req.session as CustomSession )?.user])
+    const user=rows[0]
+    let secrect;
+    
+if(user.totp_key){
+  secrect=user.totp_key
+}else{
+  const secrectHex=crypto.randomBytes(48).toString('hex')
+
+  secrect=OTPAuth.Secret.fromHex(secrectHex).base32
+ 
+}
+    
+
+
+
+await connection.query("UPDATE user SET totp_key =? ,totp_active = ? where id = ?",[secrect,totp_active === 'true' ?1:0,(req.session as CustomSession )?.user])
+
+let totp = new OTPAuth.TOTP({
+  issuer: "Auth",
+  label: "Authapp",
+  algorithm: "SHA1",
+  digits: 6,
+  period: 60,
+  secret: secrect, // or 'OTPAuth.Secret.fromBase32("NB2W45DFOIZA")'
+});
+
+
+
+
+let uri = totp.toString();
+
+
+const qrimage= await QRCode.toDataURL(uri);
+
+
+
+       
+
+    
+    return res.status(201).json({qrimage:qrimage,code:secrect})
+    
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Something went wrong" });
+    
+  }
+})
+
 app.get("/api/user", isAuthenticated, async (req: Request, res: Response) => {
   try {
     if (req.session) {
       const [rows, fields]: [RowDataPacket[], FieldPacket[]] =
         await connection.query(
-          "SELECT id, email, username,fullname FROM user WHERE id = ?",
+          "SELECT id, email, username,fullname,totp_active FROM user WHERE id = ?",
           [(req.session as CustomSession)?.user]
         );
 
